@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="https://code.jquery.com/ui/1.11.2/jquery-ui.min.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap-theme.min.css">
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js"></script>
+  <script src="http://d3js.org/d3.v3.min.js" type="text/javascript"></script>
+  <script src='http://cdnjs.cloudflare.com/ajax/libs/crossfilter/1.3.7/crossfilter.js' type='text/javascript'></script>
+  <script src='http://cdnjs.cloudflare.com/ajax/libs/dc/1.7.1/dc.js' type='text/javascript'></script>
+  <link href='http://cdnjs.cloudflare.com/ajax/libs/dc/1.7.1/dc.css' rel='stylesheet' type='text/css'>
+  <style>
+  </style>
+</head>
+<body>
+
+
+  <!-- anchor div for data table -->
+  <div id='employer-data-table'>
+      <!-- create a custom header -->
+      <div class='header'>
+          <span>Employer Name</span>
+          <span>Number of Positions</span>
+          <!--
+          <span>Prevailing</span>
+          <span>Offer</span> 
+        -->
+      </div>
+      <!-- data rows will filled in here -->
+  </div>
+
+
+
+<script>
+
+
+d3.csv("data/lca_h1b.csv.gz", function(error, lcah1b_data) {
+
+  lcah1b_crossfilter = crossfilter(lcah1b_data);
+
+  lcah1b_employerName_dimension = lcah1b_crossfilter.dimension((function(d) { return d.LCA_CASE_EMPLOYER_NAME; });
+  lcah1b_employerName_group = lcah1b_employerName_dimension.group();
+
+  //disguise the group as a dimension
+  var lcah1b_employerName_group_dimension = {
+  top: function (x) {
+    return lcah1b_employerName_group.top(x)
+            .map(function (grp) { return {"employer_name":grp.key, "number_of_positions":grp.value}; });
+    }
+  };
+
+  dc.dataTable('#employer-data-table')
+    .dimension(lcah1b_employerName_group_dimension)
+
+    .group(function (d) {
+            return d.employer_name;
+        })
+        .size(50) // (optional) max number of records to be shown, :default = 25
+
+    .columns([
+        'employer_name',    // d['date'], ie, a field accessor; capitalized automatically
+        'number_of_positions'
+    ])
+
+    .sortBy(function (d) {
+        return d.number_of_positions;
+    })
+
+    .order(d3.descending);
+
+    /*.renderlet(function (table) {
+        table.selectAll('.dc-table-group').classed('info', true);
+    });*/
+});
+
+
+</script>
+</body>
+</html>
