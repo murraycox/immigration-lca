@@ -2,9 +2,15 @@ __author__ = 'murray'
 import json
 import psycopg2
 
+
+def get_connection():
+
+    return psycopg2.connect("dbname='immigration-lca' user='murray' host='MCiMac.home' password='' connect_timeout=30")
+
+
 def get_employers_for_industry(code):
     try:
-        conn = psycopg2.connect("dbname='immigration-lca' user='murray' host='localhost' password=''")
+        conn = get_connection()
         cur = conn.cursor()
 
     except:
@@ -77,12 +83,12 @@ SELECT
 
 
 def get_positions_for_industry(code):
-    try:
-        conn = psycopg2.connect("dbname='immigration-lca' user='murray' host='localhost' password=''")
-        cur = conn.cursor()
+    #try:
+    conn = get_connection()
+    cur = conn.cursor()
 
-    except:
-        print("Problem connecting to the database")
+    #except:
+    #    print("Problem connecting to the database")
 
     cur = conn.cursor()
     cur.execute("""
@@ -158,7 +164,7 @@ def get_positions_for_industry(code):
 
 def get_positions_for_industry_employer(code, employer):
     try:
-        conn = psycopg2.connect("dbname='immigration-lca' user='murray' host='localhost' password=''")
+        conn = get_connection()
         cur = conn.cursor()
 
     except:
@@ -239,14 +245,35 @@ def get_positions_for_industry_employer(code, employer):
     return positions
 
 def get_industries():
-    try:
-        conn = psycopg2.connect("dbname='immigration-lca' user='murray' host='localhost' password=''")
-        cur = conn.cursor()
 
-    except:
-        print("Problem connecting to the database")
+    conn = get_connection()
 
     cur = conn.cursor()
+    cur.execute("""
+                SELECT
+                        count(*) as applications,
+                        sum("TOTAL_WORKERS") as positions,
+                        AVG("LCA_CASE_WAGE_RATE_FROM")::integer as wage_offer,
+                        AVG("PW_1")::integer as wage_prevailing
+                    FROM h1_b
+                    WHERE
+                        UPPER("STATUS") = 'CERTIFIED'
+                        AND
+                        "FULL_TIME_POS" = TRUE
+                        AND
+                        "LCA_CASE_WAGE_RATE_UNIT" = 'Year'
+                        AND
+                        "PW_UNIT_1" = 'Year'
+                    """)
+
+    (applications, positions, wage_offer, wage_prevailing) = cur.fetchone()
+
+    visaPositions = {"positionsCount": positions, "applicationsCount":applications, "wagePrevailing": wage_prevailing, "wageOffer": wage_offer, "maxWage": 220000, "type": "AllIndustries", "children": []}
+    root = {"visaPositions": visaPositions}
+
+    cur.close()
+    cur = conn.cursor()
+
     cur.execute("""
                 SELECT
                     CASE WHEN row_number > 10
@@ -297,8 +324,6 @@ def get_industries():
                 ORDER BY MIN(row_number) ASC
                     """)
 
-    visaPositions = {"positionsCount": 10000, "applicationsCount":10000, "wagePrevailing": 70000, "wageOffer": 80000, "maxWage": 220000, "type": "AllIndustries", "children": []}
-    root = {"visaPositions": visaPositions}
 
     while True:
         row = cur.fetchone()
