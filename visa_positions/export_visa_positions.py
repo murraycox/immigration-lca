@@ -81,6 +81,79 @@ SELECT
     return employers
 
 
+def get_positions_for_all():
+    #try:
+    conn = get_connection()
+    cur = conn.cursor()
+
+    #except:
+    #    print("Problem connecting to the database")
+
+    cur = conn.cursor()
+    cur.execute("""
+                --Get positions
+                SELECT
+                    CASE WHEN row_number > 10
+                        THEN 'Others'
+                        ELSE soc END AS sic_code,
+                    CASE WHEN row_number > 10
+                        THEN 'Others'
+                        ELSE soc_title END AS sic_description,
+                    SUM(applications)::INTEGER AS applications_count,
+                    SUM(positions)::INTEGER AS positions_count,
+                    ROUND(SUM(lca_case_wage_rate_from * positions)/SUM(positions))::INTEGER AS lca_case_wage_rate_from,
+                    ROUND(SUM(pw_1 * positions)/SUM(positions))::INTEGER AS pw_1
+                        FROM
+                            (SELECT
+                                ROW_NUMBER() OVER (ORDER BY sum("TOTAL_WORKERS") DESC) AS row_number,
+                                soc_2010_parent.soc,
+                                soc_2010_parent.soc_title,
+                                COUNT(*) as applications,
+                                SUM("TOTAL_WORKERS") as positions,
+                                ROUND(SUM("LCA_CASE_WAGE_RATE_FROM" * "TOTAL_WORKERS")/SUM("TOTAL_WORKERS"))::INTEGER as lca_case_wage_rate_from,
+                                ROUND(SUM("PW_1" * "TOTAL_WORKERS")/SUM("TOTAL_WORKERS"))::INTEGER as pw_1
+                            FROM h1_b
+                                INNER JOIN soc_2010
+                                    ON "LCA_CASE_SOC_CODE" = soc
+                                INNER JOIN soc_2010 soc_2010_parent
+                                    ON soc_2010.l3_soc = soc_2010_parent.soc
+                            WHERE
+                                UPPER("STATUS") = 'CERTIFIED'
+                                AND
+                                "FULL_TIME_POS" = TRUE
+                                AND
+                                "LCA_CASE_WAGE_RATE_UNIT" = 'Year'
+                                AND
+                                "PW_UNIT_1" = 'Year'
+                            GROUP BY
+                                soc_2010_parent.soc,
+                                soc_2010_parent.soc_title
+                            ORDER BY
+                                positions DESC) as h1_b_by_soc
+                GROUP BY
+                    CASE WHEN row_number > 10
+                        THEN 'Others'
+                        ELSE soc END,
+                    CASE WHEN row_number > 10
+                        THEN 'Others'
+                        ELSE soc_title END
+                ORDER BY MIN(row_number) ASC
+                    """)
+
+    positions = [];
+
+    while True:
+        row = cur.fetchone()
+        if row is None:
+            break
+        (sic_code, sic_description, applications_count, positions_count, wage_offer, wage_prevailing) = row
+        position = {"sicCode": sic_code, "sicDescription": sic_description, "positionsCount": positions_count, "applicationsCount":applications_count, "wagePrevailing": wage_prevailing, "wageOffer": wage_offer }
+        positions.append(position)
+
+
+    cur.close()
+    conn.close()
+    return positions
 
 def get_positions_for_industry(code):
     #try:
@@ -268,7 +341,11 @@ def get_industries():
 
     (applications, positions, wage_offer, wage_prevailing) = cur.fetchone()
 
-    visaPositions = {"positionsCount": positions, "applicationsCount":applications, "wagePrevailing": wage_prevailing, "wageOffer": wage_offer, "maxWage": 220000, "type": "AllIndustries", "children": []}
+    visaPositions = {"description": "All Industries", "positionsCount": positions, "applicationsCount":applications, "wagePrevailing": wage_prevailing, "wageOffer": wage_offer, "maxWage": 220000, "type": "AllIndustries", "positions": [], "children": []}
+
+    positions = get_positions_for_all()
+    visaPositions['positions'] = positions
+
     root = {"visaPositions": visaPositions}
 
     cur.close()
